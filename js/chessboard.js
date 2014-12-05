@@ -1,11 +1,11 @@
 /*!
- * chessboard.js $version$
+ * chessboard.js v0.3.0
  *
  * Copyright 2013 Chris Oakman
  * Released under the MIT license
- * https://github.com/oakmac/chessboardjs/blob/master/LICENSE
+ * http://chessboardjs.com/license
  *
- * Date: $date$
+ * Date: 10 Aug 2013
  */
 
 // start anonymous scope
@@ -186,6 +186,7 @@ function objToFen(obj) {
 }
 
 window['ChessBoard'] = window['ChessBoard'] || function(containerElOrId, cfg) {
+'use strict';
 
 cfg = cfg || {};
 
@@ -199,7 +200,6 @@ var MINIMUM_JQUERY_VERSION = '1.7.0',
 
 // use unique class names to prevent clashing with anything else on the page
 // and simplify selectors
-// NOTE: these should never change
 var CSS = {
   alpha: 'alpha-d2270',
   black: 'black-3c85d',
@@ -254,8 +254,8 @@ var ANIMATION_HAPPENING = false,
 // JS Util Functions
 //------------------------------------------------------------------------------
 
-// http://tinyurl.com/3ttloxj
-function uuid() {
+// http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript
+function createId() {
   return 'xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx-xxxx'.replace(/x/g, function(c) {
     var r = Math.random() * 16 | 0;
     return r.toString(16);
@@ -499,7 +499,7 @@ function expandConfig() {
 // fudge factor, and then keep reducing until we find an exact mod 8 for
 // our square size
 function calculateSquareSize() {
-  var containerWidth = parseInt(containerEl.width(), 10);
+  var containerWidth = parseInt(containerEl.css('width'), 10);
 
   // defensive, prevent infinite loop
   if (! containerWidth || containerWidth <= 0) {
@@ -507,7 +507,8 @@ function calculateSquareSize() {
   }
 
   // pad one pixel
-  var boardWidth = containerWidth - 1;
+  // var boardWidth = containerWidth - 1;
+  var boardWidth = containerWidth - BOARD_BORDER_SIZE * 2;
 
   while (boardWidth % 8 !== 0 && boardWidth > 0) {
     boardWidth--;
@@ -522,7 +523,7 @@ function createElIds() {
   for (var i = 0; i < COLUMNS.length; i++) {
     for (var j = 1; j <= 8; j++) {
       var square = COLUMNS[i] + j;
-      SQUARE_ELS_IDS[square] = square + '-' + uuid();
+      SQUARE_ELS_IDS[square] = square + '-' + createId();
     }
   }
 
@@ -531,8 +532,8 @@ function createElIds() {
   for (var i = 0; i < pieces.length; i++) {
     var whitePiece = 'w' + pieces[i];
     var blackPiece = 'b' + pieces[i];
-    SPARE_PIECE_ELS_IDS[whitePiece] = whitePiece + '-' + uuid();
-    SPARE_PIECE_ELS_IDS[blackPiece] = blackPiece + '-' + uuid();
+    SPARE_PIECE_ELS_IDS[whitePiece] = whitePiece + '-' + createId();
+    SPARE_PIECE_ELS_IDS[blackPiece] = blackPiece + '-' + createId();
   }
 }
 
@@ -696,7 +697,7 @@ function animateSquareToSquare(src, dest, piece, completeFn) {
 
   // create the animated piece and absolutely position it
   // over the source square
-  var animatedPieceId = uuid();
+  var animatedPieceId = createId();
   $('body').append(buildPiece(piece, true, animatedPieceId));
   var animatedPieceEl = $('#' + animatedPieceId);
   animatedPieceEl.css({
@@ -737,7 +738,7 @@ function animateSparePieceToSquare(piece, dest, completeFn) {
   var destOffset = destSquareEl.offset();
 
   // create the animate piece
-  var pieceId = uuid();
+  var pieceId = createId();
   $('body').append(buildPiece(piece, true, pieceId));
   var animatedPieceEl = $('#' + pieceId);
   animatedPieceEl.css({
@@ -772,10 +773,6 @@ function animateSparePieceToSquare(piece, dest, completeFn) {
 
 // execute an array of animations
 function doAnimations(a, oldPos, newPos) {
-  if (a.length === 0) {
-    return;
-  }
-
   ANIMATION_HAPPENING = true;
 
   var numFinished = 0;
@@ -974,6 +971,7 @@ function drawPositionInstant() {
   // add the pieces
   for (var i in CURRENT_POSITION) {
     if (CURRENT_POSITION.hasOwnProperty(i) !== true) continue;
+    if (DRAGGING_A_PIECE && DRAGGED_PIECE_SOURCE == i) continue;
 
     $('#' + SQUARE_ELS_IDS[i]).append(buildPiece(CURRENT_POSITION[i]));
   }
@@ -1298,6 +1296,17 @@ widget.clear = function(useAnimation) {
   widget.position({}, useAnimation);
 };
 
+/*
+// get or set config properties
+// TODO: write this, GitHub Issue #1
+widget.config = function(arg1, arg2) {
+  // get the current config
+  if (arguments.length === 0) {
+    return deepCopy(cfg);
+  }
+};
+*/
+
 // remove the widget from the page
 widget.destroy = function() {
   // remove markup
@@ -1315,7 +1324,7 @@ widget.fen = function() {
 
 // flip orientation
 widget.flip = function() {
-  return widget.orientation('flip');
+  widget.orientation('flip');
 };
 
 /*
@@ -1371,14 +1380,14 @@ widget.orientation = function(arg) {
   if (arg === 'white' || arg === 'black') {
     CURRENT_ORIENTATION = arg;
     drawBoard();
-    return CURRENT_ORIENTATION;
+    return;
   }
 
   // flip orientation
   if (arg === 'flip') {
     CURRENT_ORIENTATION = (CURRENT_ORIENTATION === 'white') ? 'black' : 'white';
     drawBoard();
-    return CURRENT_ORIENTATION;
+    return;
   }
 
   error(5482, 'Invalid value passed to the orientation method.', arg);
@@ -1464,7 +1473,7 @@ widget.start = function(useAnimation) {
 //------------------------------------------------------------------------------
 
 function isTouchDevice() {
-  return ('ontouchstart' in document.documentElement);
+  return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
 }
 
 // reference: http://www.quirksmode.org/js/detect.html
@@ -1495,18 +1504,12 @@ function mousedownSquare(e) {
 function touchstartSquare(e) {
   // do nothing if we're not draggable
   if (cfg.draggable !== true) return;
-
   var square = $(this).attr('data-square');
-
-  // no piece on this square
-  if (validSquare(square) !== true ||
-      CURRENT_POSITION.hasOwnProperty(square) !== true) {
-    return;
-  }
-
-  e = e.originalEvent;
-  beginDraggingPiece(square, CURRENT_POSITION[square],
-    e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+  //only test if valid square -allow touch of empty square
+  // CURRENT_POSITION[square] hold the piece at square, ex wP;
+  if(validSquare(square) !== true) return;
+   e = e.originalEvent;
+   beginTOUCH(square, e.changedTouches[0].pageX, e.changedTouches[0].pageY);
 }
 
 function mousedownSparePiece(e) {
@@ -1618,51 +1621,84 @@ function mouseleaveSquare(e) {
     CURRENT_ORIENTATION);
 }
 
+var firstTouchMove = true;
+
+function beginTOUCH(square, x, y){
+  if(firstTouchMove) {
+    // no piece on this square
+    if (CURRENT_POSITION.hasOwnProperty(square) !== true) {
+      return;  /* the first touch must be a peice */
+    }
+    var piece = CURRENT_POSITION[square];
+    // onDragStart function ensures correct color was touched by turn
+    if ( cfg.onDragStart(square, piece, deepCopy(CURRENT_POSITION), CURRENT_ORIENTATION) === false) {
+      return;
+    }
+    firstTouchMove = false;
+    // set state
+    DRAGGING_A_PIECE = true;
+    DRAGGED_PIECE = piece;
+    DRAGGED_PIECE_SOURCE = square;
+    DRAGGED_PIECE_LOCATION = square;
+    // capture the x, y coords of all squares in memory
+    captureSquareOffsets();
+
+    $('#' + SQUARE_ELS_IDS[square]).addClass(CSS.highlight1);
+
+  }
+  else if(square == DRAGGED_PIECE_SOURCE) {
+    $('#' + SQUARE_ELS_IDS[square]).removeClass(CSS.highlight1);
+    firstTouchMove = true;
+  }
+  else {
+    firstTouchMove = true;
+    //this will replace the touchendWindow method
+    stopDraggedPiece(square);
+  }
+}
+
+
 //------------------------------------------------------------------------------
 // Initialization
 //------------------------------------------------------------------------------
 
 function addEvents() {
-  // prevent browser "image drag"
-  $('body').on('mousedown mousemove', '.' + CSS.piece, stopDefault);
-
-  // mouse drag pieces
-  boardEl.on('mousedown', '.' + CSS.square, mousedownSquare);
-  containerEl.on('mousedown', '.' + CSS.sparePieces + ' .' + CSS.piece,
-    mousedownSparePiece);
-
-  // mouse enter / leave square
-  boardEl.on('mouseenter', '.' + CSS.square, mouseenterSquare)
-    .on('mouseleave', '.' + CSS.square, mouseleaveSquare);
-
-  // IE doesn't like the events on the window object, but other browsers
-  // perform better that way
-  if (isMSIE() === true) {
-    // IE-specific prevent browser "image drag"
-    document.ondragstart = function() { return false; };
-
-    $('body').on('mousemove', mousemoveWindow)
-      .on('mouseup', mouseupWindow);
-  }
-  else {
-    $(window).on('mousemove', mousemoveWindow)
-      .on('mouseup', mouseupWindow);
-  }
-
-  // touch drag pieces
-  if (isTouchDevice() === true) {
+  if(isTouchDevice() === true) {
     boardEl.on('touchstart', '.' + CSS.square, touchstartSquare);
     containerEl.on('touchstart', '.' + CSS.sparePieces + ' .' + CSS.piece,
       touchstartSparePiece);
-    $(window).on('touchmove', touchmoveWindow)
-      .on('touchend', touchendWindow);
+    //$(window).on('touchmove', touchmoveWindow); nad cutout
+    //$(window).on('touchend', touchendWindow); nad cutout
+  } else {
+    // prevent browser "image drag"
+    $('body').on('mousedown mousemove', '.' + CSS.piece, stopDefault);
+
+    // mouse drag pieces
+    boardEl.on('mousedown', '.' + CSS.square, mousedownSquare);
+    containerEl.on('mousedown', '.' + CSS.sparePieces + ' .' + CSS.piece,
+      mousedownSparePiece);
+
+    // mouse enter / leave square
+    boardEl.on('mouseenter', '.' + CSS.square, mouseenterSquare);
+    boardEl.on('mouseleave', '.' + CSS.square, mouseleaveSquare);
+
+    // IE doesn't like the events on the window object, but other browsers
+    // perform better that way
+    if (isMSIE() === true) {
+      // IE-specific prevent browser "image drag"
+      document.ondragstart = function() { return false; };
+
+      $('body').on('mousemove', mousemoveWindow);
+      $('body').on('mouseup', mouseupWindow);
+    }
+    else {
+      $(window).on('mousemove', mousemoveWindow);
+      $(window).on('mouseup', mouseupWindow);
+    }
   }
 }
 
 function initDom() {
-  // create unique IDs for all the elements we will create
-  createElIds();
-
   // build board and save it in memory
   containerEl.html(buildBoardContainer());
   boardEl = containerEl.find('.' + CSS.board);
@@ -1673,7 +1709,7 @@ function initDom() {
   }
 
   // create the drag piece
-  var draggedPieceId = uuid();
+  var draggedPieceId = createId();
   $('body').append(buildPiece('wP', true, draggedPieceId));
   draggedPieceEl = $('#' + draggedPieceId);
 
@@ -1687,6 +1723,9 @@ function initDom() {
 function init() {
   if (checkDeps() !== true ||
       expandConfig() !== true) return;
+
+  // create unique IDs for all the elements we will create
+  createElIds();
 
   initDom();
   addEvents();
@@ -1705,3 +1744,7 @@ window.ChessBoard.fenToObj = fenToObj;
 window.ChessBoard.objToFen = objToFen;
 
 })(); // end anonymous wrapper
+
+if (typeof define === 'function' && define.amd) define(function () {
+    return window.ChessBoard;
+});
