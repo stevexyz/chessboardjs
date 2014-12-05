@@ -317,7 +317,7 @@ function error(code, msg, obj) {
     if (obj) {
       errorText += '\n\n' + JSON.stringify(obj);
     }
-    window.alert(errorText);
+    console.log(errorText);
     return;
   }
 
@@ -333,7 +333,7 @@ function checkDeps() {
   if (typeof containerElOrId === 'string') {
     // cannot be empty
     if (containerElOrId === '') {
-      window.alert('ChessBoard Error 1001: ' +
+      console.log('ChessBoard Error 1001: ' +
         'The first argument to ChessBoard() cannot be an empty string.' +
         '\n\nExiting...');
       return false;
@@ -342,7 +342,7 @@ function checkDeps() {
     // make sure the container element exists in the DOM
     var el = document.getElementById(containerElOrId);
     if (! el) {
-      window.alert('ChessBoard Error 1002: Element with id "' +
+      console.log('ChessBoard Error 1002: Element with id "' +
         containerElOrId + '" does not exist in the DOM.' +
         '\n\nExiting...');
       return false;
@@ -359,7 +359,7 @@ function checkDeps() {
     containerEl = $(containerElOrId);
 
     if (containerEl.length !== 1) {
-      window.alert('ChessBoard Error 1003: The first argument to ' +
+      console.log('ChessBoard Error 1003: The first argument to ' +
         'ChessBoard() must be an ID or a single DOM node.' +
         '\n\nExiting...');
       return false;
@@ -370,7 +370,7 @@ function checkDeps() {
   if (! window.JSON ||
       typeof JSON.stringify !== 'function' ||
       typeof JSON.parse !== 'function') {
-    window.alert('ChessBoard Error 1004: JSON does not exist. ' +
+    console.log('ChessBoard Error 1004: JSON does not exist. ' +
       'Please include a JSON polyfill.\n\nExiting...');
     return false;
   }
@@ -378,7 +378,7 @@ function checkDeps() {
   // check for a compatible version of jQuery
   if (! (typeof window.$ && $.fn && $.fn.jquery &&
       compareSemVer($.fn.jquery, MINIMUM_JQUERY_VERSION) === true)) {
-    window.alert('ChessBoard Error 1005: Unable to find a valid version ' +
+    console.log('ChessBoard Error 1005: Unable to find a valid version ' +
       'of jQuery. Please include jQuery ' + MINIMUM_JQUERY_VERSION + ' or ' +
       'higher on the page.\n\nExiting...');
     return false;
@@ -638,18 +638,45 @@ function buildBoard(orientation) {
   return html;
 }
 
+var imgCache = {}
+function cacheImages() {
+  var pieces = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP'];
+  pieces.forEach(function(piece) {
+    var img = new Image()
+    img.onload = function() {
+      imgCache[piece] = getBase64Image(img)
+    }
+    img.src = buildPieceImgSrc(piece)
+  })
+
+  function getBase64Image(img) {
+    var canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    var ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    var dataURL = canvas.toDataURL("image/png");
+    return dataURL;
+  }
+}
+
 function buildPieceImgSrc(piece) {
-  if (typeof cfg.pieceTheme === 'function') {
-    return cfg.pieceTheme(piece);
-  }
+  if(imgCache[piece]) return imgCache[piece]
+  else return getUrl(piece)
 
-  if (typeof cfg.pieceTheme === 'string') {
-    return cfg.pieceTheme.replace(/{piece}/g, piece);
-  }
+  function getUrl(piece) {
+    if (typeof cfg.pieceTheme === 'function') {
+      return cfg.pieceTheme(piece);
+    }
 
-  // NOTE: this should never happen
-  error(8272, 'Unable to build image source for cfg.pieceTheme.');
-  return '';
+    if (typeof cfg.pieceTheme === 'string') {
+      return cfg.pieceTheme.replace(/{piece}/g, piece);
+    }
+
+    // NOTE: this should never happen
+    error(8272, 'Unable to build image source for cfg.pieceTheme.');
+    return '';
+  }
 }
 
 function buildPiece(piece, hidden, id) {
@@ -1330,10 +1357,9 @@ widget.flip = function() {
 /*
 // TODO: write this, GitHub Issue #5
 widget.highlight = function() {
-
 };
 */
-
+widget.cache = cacheImages
 // move pieces
 widget.move = function() {
   // no need to throw an error here; just do nothing
@@ -1473,7 +1499,7 @@ widget.start = function(useAnimation) {
 //------------------------------------------------------------------------------
 
 function isTouchDevice() {
-  return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+  return ('ontouchstart' in document.documentElement);
 }
 
 // reference: http://www.quirksmode.org/js/detect.html
@@ -1508,8 +1534,9 @@ function touchstartSquare(e) {
   //only test if valid square -allow touch of empty square
   // CURRENT_POSITION[square] hold the piece at square, ex wP;
   if(validSquare(square) !== true) return;
-   e = e.originalEvent;
-   beginTOUCH(square, e.changedTouches[0].pageX, e.changedTouches[0].pageY);
+
+  e = e.originalEvent;
+  beginTOUCH(square, e.changedTouches[0].pageX, e.changedTouches[0].pageY);
 }
 
 function mousedownSparePiece(e) {
@@ -1657,7 +1684,6 @@ function beginTOUCH(square, x, y){
   }
 }
 
-
 //------------------------------------------------------------------------------
 // Initialization
 //------------------------------------------------------------------------------
@@ -1700,6 +1726,7 @@ function addEvents() {
 
 function initDom() {
   // build board and save it in memory
+  cacheImages();
   containerEl.html(buildBoardContainer());
   boardEl = containerEl.find('.' + CSS.board);
 
